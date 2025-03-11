@@ -22,6 +22,8 @@ public class BatchConfig {
 
 	@Autowired
 	public StepBuilderFactory stepBuilderFactory;
+	
+	// Bean for custom decider and listener
 
 	@Bean
 	public Step stepOne() {
@@ -44,7 +46,7 @@ public class BatchConfig {
 				boolean isStepTwoSuccess = true;
 				if(isStepTwoSuccess) {
 					System.out.println("step2 executed!!");
-				}v
+				}
 				return RepeatStatus.FINISHED;
 			}
 		}).build();
@@ -61,7 +63,34 @@ public class BatchConfig {
 			}
 		}).build();
 	}
+	
+	@Bean
+	public Step stepFour() {
+		return this.stepBuilderFactory.get("step4").tasklet(new Tasklet() {
 
+			@Override
+			public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+				System.out.println("step4 executed!!");
+				return RepeatStatus.FINISHED;
+			}
+		}).build();
+	}
+
+	// .preventRestart - stop re-execute
+	// sequence stepping
+	// .start(stepOne()).on("COMPLETED").to(stepTwo())
+	// 					.form(stepTwo()).on("COMPLETED").to(stepThree())
+	//					.end()
+	
+	//conditional stepping
+	// .form(stepTwo()).on("COMPLETED").to(stepThree())
+	// .form(stepTwo()).on("FAILED").to(stepFour())
+	
+	// use.on("*") mean catch method
+	
+	// listener package for custom condition
+	
+	// step-by-step batch
 	@Bean
 	public Job firstJob() {
 		return this.jobBuilderFactory.get("job1")
@@ -70,5 +99,5 @@ public class BatchConfig {
 				.next(stepTwo())
 				.next(stepThree())
 				.build();
-	}6
+	}
 }
