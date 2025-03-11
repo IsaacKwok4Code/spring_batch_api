@@ -5,54 +5,78 @@ import java.util.List;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
-import org.springframework.batch.core.scope.context.ChunkContext;
-import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.mapping.DefaultLineMapper;
+import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 
+import com.learnspringbatch.springbatchdemo.domain.Product;
+import com.learnspringbatch.springbatchdemo.domain.ProductFieldSetMapper;
 import com.learnspringbatch.springbatchdemo.reader.ProductNameItemReader;
 
 @Configuration
 @EnableBatchProcessing
 public class BatchConfig {
-	// scheduler -> job launcher -> job 1,2,3 -> job instance for each -> job execution
 	@Autowired
 	public JobBuilderFactory jobBuilderFactory;
-
+	
 	@Autowired
 	public StepBuilderFactory stepBuilderFactory;
-	
-	// Bean for custom decider and listener
 	
 	@Bean
 	public ItemReader<String> itemReader() {
 		List<String> productList = new ArrayList<>();
-		productList.add("Product_1");
-		productList.add("Product_2");
-		productList.add("Product_3");
-		productList.add("Product_4");
-		productList.add("Product_5");
+		productList.add("Product 1");
+		productList.add("Product 2");
+		productList.add("Product 3");
+		productList.add("Product 4");
+		productList.add("Product 5");
+		productList.add("Product 6");
+		productList.add("Product 7");
+		productList.add("Product 8");
 		return new ProductNameItemReader(productList);
 	}
 	
 	@Bean
-	public Step stepOne() {
+	public ItemReader<Product> flatFileItemReader() {
+		FlatFileItemReader<Product> itemReader = new FlatFileItemReader<>();
+		// skip for title row
+		itemReader.setLinesToSkip(1);
+		// data source
+		itemReader.setResource(new ClassPathResource("/data/Product_Details.csv"));
+		// read line mapper
+		DefaultLineMapper<Product> lineMapper = new DefaultLineMapper<>();
+		// read field mapper from line mapper
+		DelimitedLineTokenizer lineTokenizer = new DelimitedLineTokenizer();
+		// based on column name
+		lineTokenizer.setNames("product_id", "product_name", "product_category", "product_price");
+		
+		lineMapper.setLineTokenizer(lineTokenizer);
+		// the object mapper is custom code in domain package
+		lineMapper.setFieldSetMapper(new ProductFieldSetMapper());
+		itemReader.setLineMapper(lineMapper);
+		return itemReader;
+	}
+	
+	@Bean
+	public Step step1() {
 		return this.stepBuilderFactory.get("chunkBasedStep1")
-				.<String,String>chunk(3) // process 3 items for 1 chuck
-				.reader(itemReader())
-				.writer(new ItemWriter<String>() {
+				.<Product,Product>chunk(3)
+				.reader(flatFileItemReader())
+				.writer(new ItemWriter<Product>() {
 
 					@Override
-					public void write(List<? extends String> items) throws Exception {
+					public void write(List<? extends Product> items) throws Exception {
 						System.out.println("Chunk-processing Started");
+						// print the result for each step
 						items.forEach(System.out::println);
 						System.out.println("Chunk-processing Ended");
 					}
@@ -62,83 +86,7 @@ public class BatchConfig {
 	@Bean
 	public Job firstJob() {
 		return this.jobBuilderFactory.get("job1")
-				.start(stepOne())
+				.start(step1())
 				.build();
 	}
-
-//	@Bean
-//	public Step stepOne() {
-//		return this.stepBuilderFactory.get("step1").tasklet(new Tasklet() {
-//
-//			@Override
-//			public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-//				System.out.println("step1 executed!!");
-//				return RepeatStatus.FINISHED;
-//			}
-//		}).build();
-//	}
-//	
-//	@Bean
-//	public Step stepTwo() {
-//		return this.stepBuilderFactory.get("step2").tasklet(new Tasklet() {
-//
-//			@Override
-//			public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-//				boolean isStepTwoSuccess = true;
-//				if(isStepTwoSuccess) {
-//					System.out.println("step2 executed!!");
-//				}
-//				return RepeatStatus.FINISHED;
-//			}
-//		}).build();
-//	}
-//	
-//	@Bean
-//	public Step stepThree() {
-//		return this.stepBuilderFactory.get("step3").tasklet(new Tasklet() {
-//
-//			@Override
-//			public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-//				System.out.println("step3 executed!!");
-//				return RepeatStatus.FINISHED;
-//			}
-//		}).build();
-//	}
-	
-//	@Bean
-//	public Step stepFour() {
-//		return this.stepBuilderFactory.get("step4").tasklet(new Tasklet() {
-//
-//			@Override
-//			public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-//				System.out.println("step4 executed!!");
-//				return RepeatStatus.FINISHED;
-//			}
-//		}).build();
-//	}
-
-	// .preventRestart - stop re-execute
-	// sequence stepping
-	// .start(stepOne()).on("COMPLETED").to(stepTwo())
-	// 					.form(stepTwo()).on("COMPLETED").to(stepThree())
-	//					.end()
-	
-	//conditional stepping
-	// .form(stepTwo()).on("COMPLETED").to(stepThree())
-	// .form(stepTwo()).on("FAILED").to(stepFour())
-	
-	// use.on("*") mean catch method
-	
-	// listener package for custom condition
-	
-	// step-by-step batch
-//	@Bean
-//	public Job firstJob() {
-//		return this.jobBuilderFactory.get("job1")
-//				.preventRestart()
-//				.start(stepOne())
-//				.next(stepTwo())
-//				.next(stepThree())
-//				.build();
-//	}
 }
